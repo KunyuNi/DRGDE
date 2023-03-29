@@ -13,9 +13,9 @@ from split import split
 
 # specicy the dataset, batch_size, and learning_rate.
 batch_size=128
-learning_rate=1.3
-dataset='C'
-smooth_ratio,rough_ratio=0.33,0.02
+learning_rate=5
+dataset='dataset5'
+smooth_ratio,rough_ratio=0.33,0.1
 # C
 torch.manual_seed(666)
 # 数据部分
@@ -33,13 +33,23 @@ elif dataset=='DDI':
     user_size,item_size=2320,2320
 elif dataset=='DTI':
     user_size,item_size=708,1512
+elif dataset== 'dataset1':
+    user_size,item_size=533,89
+elif dataset== 'dataset2':
+    user_size,item_size=514,62
+elif dataset== 'dataset3':
+    user_size,item_size=312,40
+elif dataset== 'dataset4':
+    user_size,item_size=923,104
+elif dataset=='dataset5':
+    user_size,item_size=1265,151
 path='./datasets/'+dataset # 文件路径
 
 
 AUROC,AUPR=[],[]
    
 class GDE(nn.Module):
-	def __init__(self, user_size, item_size,u=0, beta=1.8, feature_type='both', drop_out=0.1, latent_size=128, reg=0.005):
+	def __init__(self, user_size, item_size,u=0, beta=0.99 , feature_type='smoothed', drop_out=0, latent_size=64, reg=0.025):
 		super(GDE, self).__init__()
 		self.user_embed=torch.nn.Embedding(user_size,latent_size)
 		self.item_embed=torch.nn.Embedding(item_size,latent_size)
@@ -69,22 +79,31 @@ class GDE(nn.Module):
 
 		elif feature_type=='both':
 			
+			rough_drug_values=np.load(path+r'/'+str(u)+'_rough_drug_values.npy')
+			rough_drug_features=np.load(path+r'/'+str(u)+'_rough_drug_features.npy')
+			rough_disease_values=np.load(path+r'/'+str(u)+'_rough_diease_values.npy')
+			rough_disease_features=np.load(path+r'/'+str(u)+'_rough_diease_features.npy')
 			
+			connected_layer_diease = nn.Linear(rough_disease_values.shape[0], rough_disease_values.shape[0])
+			connected_layer_drug=nn.Linear(rough_drug_values.shape[0],rough_drug_values.shape[0])
+			# rough_disease_values=connected_layer_diease(torch.Tensor(rough_disease_values))
+			# rough_drug_values=connected_layer_drug(torch.Tensor(rough_drug_values))
 
 			user_filter=torch.cat([self.weight_feature(torch.Tensor(np.load(path+r'/'+str(u)+'_smooth_drug_values.npy')).cuda())\
-				,self.weight_feature(torch.Tensor(np.load(path+r'/'+str(u)+'_rough_drug_values.npy')).cuda())])
-
+				,self.weight_feature(torch.Tensor(rough_drug_values).cuda())])
+   
 			item_filter=torch.cat([self.weight_feature(torch.Tensor(np.load(path+r'/'+str(u)+'_smooth_diease_values.npy')).cuda())\
-				,self.weight_feature(torch.Tensor(np.load(path+r'/'+str(u)+'_rough_diease_values.npy')).cuda())])
+				,self.weight_feature(torch.Tensor(rough_disease_values).cuda())])
 
 
 			user_vector=torch.cat([torch.Tensor(np.load(path+r'/'+str(u)+'_smooth_drug_features.npy')).cuda(),\
-				torch.Tensor(np.load(path+r'/'+str(u)+'_rough_drug_features.npy')).cuda()],1)
-
+				torch.Tensor(rough_drug_features).cuda()],1)
 
 			item_vector=torch.cat([torch.Tensor(np.load(path+r'/'+str(u)+'_smooth_diease_features.npy')).cuda(),\
-				torch.Tensor(np.load(path+r'/'+str(u)+'_rough_diease_features.npy')).cuda()],1)
+				torch.Tensor(rough_disease_features).cuda()],1)
+   
 
+			
 
 		else:
 			print('error')
@@ -109,8 +128,8 @@ class GDE(nn.Module):
 			final_user,final_pos,final_nega=self.L_u[user].mm(self.user_embed.weight),self.L_i[pos_item].mm(self.item_embed.weight),self.L_i[nega_item].mm(self.item_embed.weight)
 
 		else:
-			final_user,final_pos,final_nega=(self.m(self.L_u[u])*(1-self.drop_out)).mm(self.user_embed.weight),(self.m(self.L_i[p])*(1-self.drop_out)).mm(self.item_embed.weight),\
-			(self.m(self.L_i[nega])*(1-self.drop_out)).mm(self.item_embed.weight)
+			final_user,final_pos,final_nega=(self.m(self.L_u[user])*(1-self.drop_out)).mm(self.user_embed.weight),(self.m(self.L_i[pos_item])*(1-self.drop_out)).mm(self.item_embed.weight),\
+			(self.m(self.L_i[nega_item])*(1-self.drop_out)).mm(self.item_embed.weight)
 
 
 		if loss_type=='adaptive':
@@ -146,10 +165,10 @@ class GDE(nn.Module):
 		print("auroc:",auroc,"aupr",aupr)
   
 # 预处理 
-split(dataset=dataset,n_splits=10,seed=666)
+split(dataset=dataset,n_splits=5,seed=666)
 
 
-for u in range(10):
+for u in range(5):
 	# 加载数据
 	print(u,'fold',end=' ')
 	df_test=pd.read_csv(path+r'/test_'+str(u)+'.csv')
@@ -169,7 +188,7 @@ for u in range(10):
 	optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
 	epoch=train_samples//batch_size
 	start_time=time.time()
-	for i in range(1000):
+	for i in range(300):
 		total_loss=0.0
 		#start=time.time()
 		for j in range(0,epoch):
@@ -181,7 +200,7 @@ for u in range(10):
 		
 			#  user,item,beta
 			loss=model(u,p,nega)
-			loss.backward()
+			loss.backward(retain_graph=True)
 			optimizer.step() 
 			optimizer.zero_grad()
 			total_loss+=loss.item()

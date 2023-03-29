@@ -60,6 +60,16 @@ def pre(smooth_ratio,rough_ratio,dataset,num):
         drug_size,diease_size=2320,2320
     elif dataset=='DTI':
         drug_size,diease_size=708,1512
+    elif dataset=='dataset1':
+        drug_size,diease_size=533,89
+    elif dataset=='dataset2':
+        drug_size,diease_size=514,62
+    elif dataset=='dataset3':
+        drug_size,diease_size=312,40
+    elif dataset=='dataset4':
+        drug_size,diease_size=923,104
+    elif dataset=='dataset5':
+        drug_size,diease_size=1265,151
     #drug degree and diease degree
     D_u=rate_matrix.sum(1)
     D_i=rate_matrix.sum(0)
